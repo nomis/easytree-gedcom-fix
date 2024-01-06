@@ -66,9 +66,8 @@ def apply(source, destination):
 				if rec == "FAM" and line[0] == "1"  and line[1] in ("ADDR", "PHON"): # Not supported
 					print(f"Discarding {rec} {line}")
 					continue
-				if rec == "SUBM" and line[0] == "1"  and line[1] == "EMAL": # Should be EMAIL
-					print(f"Discarding {rec} {line}")
-					continue
+				if rec == "SUBM" and line[0] == "1"  and line[1] == "EMAL":
+					line[1] = "EMAIL"
 				if line[1] == "CONC": # Need to export at 255 chars per line
 					line[1] = "CONT"
 				if rec == "NOTE" and line[0] == "2" and line[1] == "SOUR":
