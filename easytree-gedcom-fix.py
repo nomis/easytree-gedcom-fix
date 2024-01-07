@@ -19,6 +19,7 @@
 # that isn't supported (phone/address information on families)
 
 import argparse
+import collections
 import io
 
 def apply(source, destination):
@@ -30,6 +31,8 @@ def apply(source, destination):
 	sour_note = []
 
 	out_recs = []
+	notes = {}
+	note_count = collections.Counter()
 
 	sour_fields = {
 		"FILN": "File Number",
@@ -109,6 +112,37 @@ def apply(source, destination):
 				continue
 
 			out_recs[-1].append(line)
+
+			if line[0] == "0" and line[1].startswith("@") and line[2].strip() == "NOTE":
+				notes[line[1]] = out_recs[-1]
+			if line[0] == "1" and line[1] == "NOTE" and line[2].startswith("@"):
+				note_count[line[2].strip()] += 1
+
+		for out_rec in out_recs:
+			if out_rec:
+				lines = []
+				for line in out_rec:
+					if line[0] == "1" and line[1] == "NOTE" and line[2].startswith("@"):
+						note_id = line[2].strip()
+						if note_count[note_id] == 1:
+							note_count[note_id] = 0
+							note = notes[note_id]
+							# 1 NOTE @N1@
+							line = []
+							# 0 @N1@ NOTE    -->    1 NOTE ...
+							# 1 CONT ...            2 CONT ...
+							# 1 CONT ...            2 SOUR @S1@
+							# 1 SOUR @S1@
+							assert note[1][1] in ("CONT", "CONC")
+							lines.append(["1", "NOTE", note[1][2]])
+							for note_line in note[2:]:
+								note_line[0] = str(int(note_line[0]) + 1)
+								lines.append(note_line)
+							note.clear()
+
+					lines.append(line)
+				out_rec.clear()
+				out_rec.extend(lines)
 
 		with io.open(destination, "wt", newline="\r\n") as o:
 			for out_rec in out_recs:
