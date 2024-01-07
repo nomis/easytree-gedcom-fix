@@ -31,8 +31,8 @@ def apply(source, destination):
 	sour_note = []
 
 	out_recs = []
-	notes = {}
-	note_count = collections.Counter()
+	idx = collections.defaultdict(dict)
+	idx_count = collections.defaultdict(collections.Counter)
 
 	sour_fields = {
 		"FILN": "File Number",
@@ -103,42 +103,62 @@ def apply(source, destination):
 			if rec == "NOTE" and line[0] == "2" and line[1] == "SOUR":
 				line[0] = "1"
 
-			if line[1] == "TEXT" and rec_n[-2:-1] == ["SOUR"]:
-				# Text from the source needs to be part of the source, not in an XREF
-				line[1] = "NOTE"
-
 			if discard_n is not None:
 				print(f"Discarding {rec} {line}")
 				continue
 
 			out_recs[-1].append(line)
 
-			if line[0] == "0" and line[1].startswith("@") and line[2].strip() == "NOTE":
-				notes[line[1]] = out_recs[-1]
-			if line[0] == "1" and line[1] == "NOTE" and line[2].startswith("@"):
-				note_count[line[2].strip()] += 1
+			if line[0] == "0" and line[1].startswith("@"):
+				idx[line[2].strip()][line[1]] = out_recs[-1]
+			if line[2].startswith("@"):
+				idx_count[line[1]][line[2].strip()] += 1
 
+		sour_text = {}
 		for out_rec in out_recs:
 			if out_rec:
 				lines = []
+				rec_n = []
 				for line in out_rec:
+					rec_n = rec_n[0:int(line[0])]
+					rec_n.append(line)
+
+					# Inline notes that are only used once
 					if line[0] == "1" and line[1] == "NOTE" and line[2].startswith("@"):
 						note_id = line[2].strip()
-						if note_count[note_id] == 1:
-							note_count[note_id] = 0
-							note = notes[note_id]
+						if idx_count["NOTE"][note_id] == 1:
+							idx_count["NOTE"][note_id] = 0
+							note = idx["NOTE"][note_id]
 							# 1 NOTE @N1@
 							line = []
 							# 0 @N1@ NOTE    -->    1 NOTE ...
 							# 1 CONT ...            2 CONT ...
 							# 1 CONT ...            2 SOUR @S1@
 							# 1 SOUR @S1@
-							assert note[1][1] in ("CONT", "CONC")
+							assert note[1][1] in ("CONT", "CONC"), note
 							lines.append(["1", "NOTE", note[1][2]])
 							for note_line in note[2:]:
 								note_line[0] = str(int(note_line[0]) + 1)
 								lines.append(note_line)
 							note.clear()
+
+					# Text from the source needs to be part of the source, not added to an XREF
+					if len(rec_n) >= 3:
+						for i in range(1, len(rec_n) - 1):
+							if rec_n[i][1] == "SOUR" and rec_n[i + 1][1] == "TEXT":
+								sour_id = rec_n[i][2].strip()
+								if rec_n[i + 1][0] == line[0]:
+									# First "TEXT" line
+									if sour_text.get(sour_id):
+										# Concatenate multiple text for the same source
+										line = [str(int(line[0]) + 1), "CONT", line[2]]
+									sour_text[sour_id] = True
+								else:
+									# Must be continuation of "TEXT"
+									assert line[1] in ("CONT", "CONC"), line
+								idx["SOUR"][sour_id].append([str(int(line[0]) - i), line[1], line[2]])
+								line = []
+								break
 
 					lines.append(line)
 				out_rec.clear()
