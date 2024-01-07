@@ -102,6 +102,10 @@ def apply(source, destination):
 				line[1] = "CONT"
 			if rec == "NOTE" and line[0] == "2" and line[1] == "SOUR":
 				line[0] = "1"
+			if line[1] == "TEXT" and rec_n[-2:-1] == ["SOUR"]:
+				if line[2].startswith("Incorrect spelling"):
+					# Hack to make this a note on the source
+					line[1] = "NOTE"
 
 			if discard_n is not None:
 				print(f"Discarding {rec} {line}")
