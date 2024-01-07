@@ -24,6 +24,7 @@ import io
 def apply(source, destination):
 	rec = None
 	rec_n = []
+	discard_n = None
 	sour_fix = None
 	sour_even = []
 	sour_note = []
@@ -45,6 +46,9 @@ def apply(source, destination):
 		with io.open(destination, "wt", newline="\r\n") as o:
 			for line in i:
 				line = line.split(" ", 2)
+				if discard_n is not None:
+					if discard_n >= int(line[0]):
+						discard_n = None
 				if line[0] == "0":
 					if sour_fix is not None:
 						o.write(sour_fix)
@@ -80,12 +84,14 @@ def apply(source, destination):
 					if line[0] == "1" and line[1] in sour_fields.keys():
 						sour_note.append(f"{sour_fields[line[1]]}: {line[2]}")
 						continue
-				if rec == "INDI" and line[0] == "1"  and line[1] == "ADDR":
-					continue
-				if rec == "FAM" and line[0] == "1"  and line[1] in ("ADDR", "PHON"): # Not supported
-					print(f"Discarding {rec} {line}")
-					continue
-				if rec == "SUBM" and line[0] == "1"  and line[1] == "EMAL":
+				if rec == "INDI" and line[0] == "1" and line[1] == "ADDR":
+					# Remove individual addresses (these may require the family address?)
+					discard_n = int(line[0])
+				if rec == "FAM" and line[0] == "1" and line[1] in ("ADDR", "PHON"): # Not supported
+					discard_n = int(line[0])
+				if rec == "SUBM" and line[0] == "1" and line[1] == "ADDR": # Remove submitter address
+					discard_n = int(line[0])
+				if rec == "SUBM" and line[0] == "1" and line[1] == "EMAL":
 					line[1] = "EMAIL"
 				if line[1] == "CONC": # Need to export at 255 chars per line
 					line[1] = "CONT"
@@ -95,6 +101,10 @@ def apply(source, destination):
 				if line[1] == "TEXT" and rec_n[-2:-1] == ["SOUR"]:
 					# Text from the source needs to be part of the source, not in an XREF
 					line[1] = "NOTE"
+
+				if discard_n is not None:
+					print(f"Discarding {rec} {line}")
+					continue
 
 				line = " ".join(line)
 				o.write(line)
