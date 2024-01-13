@@ -73,6 +73,7 @@ def apply(source, destination):
 				rec = line[2].strip()
 				rec_n = []
 			else:
+				rec_n = rec_n[0:int(line[0]) - 1]
 				rec_n.append(line[1])
 
 			if rec == "SOUR":
